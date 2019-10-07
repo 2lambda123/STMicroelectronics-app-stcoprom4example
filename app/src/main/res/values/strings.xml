@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">ST Copro M4Example</string>
+
+    <string name="but_start">Start ADC sampling</string>
+    <string name="but_stop">Stop</string>
+
+    <string name="title_log">Logs</string>
+    <string name="title_graph">ADC graph</string>
+</resources>
