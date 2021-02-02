@@ -6,7 +6,6 @@ import android.copro.CoproManager;
 import android.copro.CoproSerialPort;
 import android.copro.FirmwareInfo;
 import android.os.IBinder;
-import android.os.RemoteException;
 import android.util.Log;
 
 import java.util.concurrent.Semaphore;
@@ -171,13 +170,7 @@ public class FirmwareService extends Service {
 
         mCoproSerialPort = mCoproManager.getSerialPort();
         if(mCoproSerialPort != null){
-            try {
-                mCoproSerialPort.open(1);
-            }catch(RemoteException e ){
-                e.printStackTrace();
-                Log.e(LOG_TAG, "Exception mCoproSerialPort.open");
-                return false;
-            }
+            mCoproSerialPort.open(1);
             Log.d(LOG_TAG, "mCoproSerialPort.open OK");
             return true;
         } else {
@@ -186,7 +179,7 @@ public class FirmwareService extends Service {
     }
 
     private class readFwThread extends Thread {
-        private AtomicBoolean mWorkOnGoing = new AtomicBoolean(true);
+        private final AtomicBoolean mWorkOnGoing = new AtomicBoolean(true);
 
         public void run() {
             String recStr;

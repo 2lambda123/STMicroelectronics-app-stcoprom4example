@@ -18,6 +18,7 @@ import android.widget.TextView;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.CRC32;
@@ -42,24 +43,25 @@ public class MainActivity extends AppCompatActivity {
     private Button mButtonStart;
     private TextView mDebugLog;
     private GraphView mGraph;
+    private final AtomicBoolean mCryptoAvailable = new AtomicBoolean(true);
 
     private static LineGraphSeries<DataPoint> mSeries;
 
     private static Long mDigestCRC;
-    private static byte[] bHASHValues = new byte[32];
-    private static byte[] bcADCValues = new byte[64];
-    private static byte[] CRYPValues = new byte[64];
+    private static final byte[] bHASHValues = new byte[32];
+    private static final byte[] bcADCValues = new byte[64];
+    private static final byte[] CRYPValues = new byte[64];
 
     private static byte[] encryptedData = new byte[64];
     private static byte[] decryptedData = new byte[64];
     private static byte[] digestData = new byte[32];
 
-    private static byte[] key = { (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
+    private static final byte[] key = { (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
             (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
             (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
             (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00 };
 
-    private static byte[] clearData = { (byte) 0x1f, (byte) 0x24, (byte) 0x2b, (byte) 0x32,
+    private static final byte[] clearData = { (byte) 0x1f, (byte) 0x24, (byte) 0x2b, (byte) 0x32,
             (byte) 0x3a, (byte) 0x43, (byte) 0x4d, (byte) 0x57,
             (byte) 0x61, (byte) 0x6c, (byte) 0x77, (byte) 0x82,
             (byte) 0x8e, (byte) 0x99, (byte) 0xa4, (byte) 0xae,
@@ -86,8 +88,13 @@ public class MainActivity extends AppCompatActivity {
                     mButtonStart.setVisibility(View.VISIBLE);
                     mButtonStart.setOnClickListener(new View.OnClickListener() {
                         public void onClick(View v) {
+                            Log.d(LOG_TAG,"Click: button start invisible");
                             mButtonStart.setVisibility(View.INVISIBLE);
-                            mDebugLog.setText("M4 resources used: TIM2 TIM7 DAC1 ADC1 DMA2 CRC2 HASH2 CRY2\n");
+                            if (mCryptoAvailable.get()) {
+                                mDebugLog.setText("M4 resources used: TIM2 TIM7 DAC1 ADC1 DMA2 CRC2 HASH2 CRY2\n");
+                            } else {
+                                mDebugLog.setText("M4 resources used: TIM2 TIM7 DAC1 ADC1 DMA2 CRC2 HASH2\n");
+                            }
                             Intent intent = new Intent(MainActivity.this, FirmwareService.class);
                             intent.setAction(FirmwareService.ACTION_SEND_COMMAND);
                             intent.putExtra(FirmwareService.EXTRA_FW_COMMAND, FW_COMMAND);
@@ -160,6 +167,18 @@ public class MainActivity extends AppCompatActivity {
         mGraph.getViewport().setXAxisBoundsManual(true);
         mGraph.getGridLabelRenderer().setHorizontalLabelsVisible(true);
         mGraph.getLegendRenderer().setVisible(false);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if ((mGraph != null) && (mSeries != null)){
+            mGraph.removeAllSeries();
+            mGraph.addSeries(mSeries);
+        }
+        if (mDebugLog != null) {
+            mDebugLog.setText("");
+        }
     }
 
     @Override
@@ -246,35 +265,45 @@ public class MainActivity extends AppCompatActivity {
                     e1.printStackTrace();
                     mDebugLog.append("SHA-256 algorithm failure\n");
                 }
+                if (! mCryptoAvailable.get()) {
+                    mButtonStart.setVisibility(View.VISIBLE);
+                }
             }
-            if (data.contains("ENCR=")) {
-                // treat CRYP
-                index = data.indexOf("ENCR=");
-                if (index > 0) {
-                    nbValues = 0;
-                    matcher = rg.matcher(data.substring(index + 5));    // search after "ENCR="
-                    while (matcher.find()) {
-                        String tmpStr = matcher.group();
-                        int tVal = Integer.parseInt(tmpStr, 16);
-                        CRYPValues[nbValues++] = (byte) (tVal & 0xFF);
-                        //CRYPValues[nbValues++] = Byte.parseByte(tmpStr, 16);  // => java.lang.NumberFormatException: Value out of range. Value:"a9" Radix:16
-                        if (nbValues >= 64) break;     //avoid array overflow
-                    }
-                    if (nbValues == 64) {
 
-                        try {
-                            encryptedData = encrypt(key, bcADCValues);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+            if ((mCryptoAvailable.get()) && (data.contains("ENCR="))) {
+                if (data.contains("ENCR=NOCRYPTO")) {
+                    mCryptoAvailable.set(false);
+                    mDebugLog.append("crypto block CRY2 not available on the device\n");
+                    mButtonStart.setVisibility(View.VISIBLE);
+                } else {
+                    // treat CRYP
+                    index = data.indexOf("ENCR=");
 
-                        if (CompareValues(encryptedData, CRYPValues, 64)) {
-                            mDebugLog.append("AES-ECB comparison success\n");
-                        } else {
-                            mDebugLog.append("AES-ECB comparison failure\n");
+                    if (index > 0) {
+                        nbValues = 0;
+                        matcher = rg.matcher(data.substring(index + 5));    // search after "ENCR="
+                        while (matcher.find()) {
+                            String tmpStr = matcher.group();
+                            int tVal = Integer.parseInt(tmpStr, 16);
+                            CRYPValues[nbValues++] = (byte) (tVal & 0xFF);
+                            //CRYPValues[nbValues++] = Byte.parseByte(tmpStr, 16);  // => java.lang.NumberFormatException: Value out of range. Value:"a9" Radix:16
+                            if (nbValues >= 64) break;     //avoid array overflow
                         }
-                        // This is the final data received, can start another measure
-                        mButtonStart.setVisibility(View.VISIBLE);
+                        if (nbValues == 64) {
+
+                            try {
+                                encryptedData = encrypt(key, bcADCValues);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+
+                            if (CompareValues(encryptedData, CRYPValues, 64)) {
+                                mDebugLog.append("AES-ECB comparison success\n");
+                            } else {
+                                mDebugLog.append("AES-ECB comparison failure\n");
+                            }
+                            // This is the final data received, can start another measure
+                            mButtonStart.setVisibility(View.VISIBLE);
     /*
                             // => javax.crypto.BadPaddingException: pad block corrupted
                             try {
@@ -283,6 +312,7 @@ public class MainActivity extends AppCompatActivity {
                                 e.printStackTrace();
                             }
     */
+                        }
                     }
                 }
             }

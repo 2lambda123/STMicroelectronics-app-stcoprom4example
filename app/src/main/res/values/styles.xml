@@ -12,16 +12,16 @@
         <item name="android:background">@drawable/shape</item>
         <item name="android:textSize">16sp</item>
         <item name="android:textColor">@color/colorPrimaryDark</item>
-        <item name="android:paddingStart">8dp</item>
-        <item name="android:paddingEnd">8dp</item>
+        <item name="android:paddingStart">@dimen/horizontal_margin_half</item>
+        <item name="android:paddingEnd">@dimen/horizontal_margin_half</item>
     </style>
 
     <style name="Button">
         <item name="android:background">@drawable/custom_btn_grey</item>
         <item name="android:textSize">18sp</item>
         <item name="android:textColor">@android:color/white</item>
-        <item name="android:paddingStart">8dp</item>
-        <item name="android:paddingEnd">8dp</item>
+        <item name="android:paddingStart">@dimen/horizontal_margin_half</item>
+        <item name="android:paddingEnd">@dimen/horizontal_margin_half</item>
         <item name="android:gravity">center</item>
     </style>
 
